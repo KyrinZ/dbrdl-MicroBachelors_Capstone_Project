@@ -1,57 +1,83 @@
-var Cloudant = require('@cloudant/cloudant');
+const { CloudantV1 } = require("@ibm-cloud/cloudant");
+const { IamAuthenticator } = require("ibm-cloud-sdk-core");
 
 /**
-  *
-  * main() will be run when you invoke this action
-  *
-  * @param Cloud Functions actions accept a single parameter, which must be a JSON object.
-  *
-  * @return The output of this action, which must be a JSON object.
-  *
-  */
+ *
+ * main() will be run when you invoke this action
+ *
+ * @param Cloud Functions actions accept a single parameter, which must be a JSON object.
+ *
+ * @return The output of this action, which must be a JSON object.
+ *
+ */
 function main(params) {
   return new Promise((resolve, reject) => {
     if (params && params.type === "reviews") {
-      getReviews(params).then(reviews => {
-        resolve({"reviews":reviews.docs})
+      getReviews(params).then((reviews) => {
+        resolve({
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: { reviews: reviews.docs },
+        });
       });
     } else if (params && params.type === "timeslots") {
       if (params.date) {
-        resolve(getTimeSlots(params.date));
+        resolve({
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: getTimeSlots(params.date),
+        });
       } else {
-        resolve(getTimeSlots(new Date()));
+        resolve({
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: getTimeSlots(new Date()),
+        });
       }
     }
-  })
+  });
 }
 
-function getReviews(params) {
+async function getReviews(params) {
   console.log(params.CLOUDANT_URL);
   console.log(params.CLOUDANT_APIKEY);
   let reviews = [];
-  const cloudant = Cloudant({ url: params.CLOUDANT_URL, plugins: { iamauth: { iamApiKey: params.CLOUDANT_APIKEY } } });
-  const db = cloudant.db.use('reviews')
+  const authenticator = new IamAuthenticator({
+    apikey: params.CLOUDANT_APIKEY,
+  });
+  const cloudant = CloudantV1.newInstance({
+    authenticator: authenticator,
+  });
 
-  return db.find({ selector: { dealership: 13 }}) ;
+  cloudant.setServiceUrl(params.CLOUDANT_URL);
+
+  const DATABASE = "reviews";
+
+  return await cloudant.postFind({
+    db: DATABASE,
+
+    selector: {
+      dealership: {
+        $eq: 13,
+      },
+    },
+  });
 }
 
-
 function getTimeSlots(date) {
-
   // ideally the code would look this up in the database, but due to limited time, this function returns some hardcoded values at this time
   const d = new Date(date);
 
   let result = {
-    "arr": [
+    arr: [
       {
-        "title": `Available time slots for ${date}`,
-        "options": [
-        ],
-        "description": "",
-        "response_type": "option"
-      }
-    ]
-  }
+        title: `Available time slots for ${date}`,
+        options: [],
+        description: "",
+        response_type: "option",
+      },
+    ],
+  };
 
   switch (d.getDay()) {
     case 0:
@@ -85,41 +111,37 @@ function getTimeSlots(date) {
       break;
     default:
       result = {
-        error: "Something went wrong!"
-      }
+        error: "Something went wrong!",
+      };
       break;
   }
   return result;
 }
 
-
-
 function getWeekend(result) {
- //Implement it if you want to challenge yourself.
+  //Implement it if you want to challenge yourself.
 }
 
 function getSlots(result) {
-  result.arr[0].options.push(
-    {
-      "label": "8:00am - 9:00am",
-      "value": {
-        "input": {
-          "text": "8:00am - 9:00am"
-        }
-      }
-    });
+  result.arr[0].options.push({
+    label: "8:00am - 9:00am",
+    value: {
+      input: {
+        text: "8:00am - 9:00am",
+      },
+    },
+  });
 
   result.arr[0].options.push({
-    "label": "11:00am - 1:00pm",
-    "value": {
-      "input": {
-        "text": "11:00am - 1:00pm"
-      }
-    }
+    label: "11:00am - 1:00pm",
+    value: {
+      input: {
+        text: "11:00am - 1:00pm",
+      },
+    },
   });
 
   return result;
 }
 
 exports.main = main;
-
